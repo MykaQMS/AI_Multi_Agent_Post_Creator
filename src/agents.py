@@ -9,6 +9,7 @@ Este módulo define a lógica dos 4 agentes especialistas:
 """
 
 import os
+import time
 from datetime import date
 from dotenv import load_dotenv
 from google import genai
@@ -17,8 +18,9 @@ from google.genai import types
 # Carrega variáveis de ambiente salvas no arquivo .env (se existir)
 load_dotenv()
 
-# Modelo padrão do Gemini para execução dos agentes
+# Modelo padrão do Gemini para execução dos agentes (com fallback se houver instabilidade)
 MODEL_ID = "gemini-2.5-flash"
+FALLBACK_MODEL_ID = "gemini-3.5-flash-lite"
 
 
 def get_client() -> genai.Client:
@@ -30,6 +32,30 @@ def get_client() -> genai.Client:
             "Por favor, certifique-se de definir a variável GOOGLE_API_KEY no arquivo .env ou no sistema."
         )
     return genai.Client(api_key=api_key)
+
+
+def _generate_with_retry(client: genai.Client, contents: str, config: types.GenerateContentConfig = None, max_retries: int = 3) -> str:
+    """Função auxiliar para tratar instabilidades temporárias no servidor (erro 503 / 429)."""
+    models_to_try = [MODEL_ID, FALLBACK_MODEL_ID]
+    
+    for model in models_to_try:
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                return response.text
+            except Exception as e:
+                err_str = str(e)
+                if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str:
+                    wait_time = (attempt + 1) * 2
+                    print(f"⚠️ Servidor ocupado ({model}). Tentando novamente em {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+    raise RuntimeError("Não foi possível obter resposta dos modelos do Gemini após várias tentativas.")
 
 
 def agente_buscador(topico: str, data_de_hoje: str = None) -> str:
@@ -54,12 +80,7 @@ def agente_buscador(topico: str, data_de_hoje: str = None) -> str:
         tools=[types.Tool(google_search=types.GoogleSearch())]
     )
 
-    response = client.models.generate_content(
-        model=MODEL_ID,
-        contents=prompt,
-        config=config,
-    )
-    return response.text
+    return _generate_with_retry(client, contents=prompt, config=config)
 
 
 def agente_planejador(topico: str, lancamentos_buscados: str) -> str:
@@ -81,11 +102,7 @@ def agente_planejador(topico: str, lancamentos_buscados: str) -> str:
     3. Chamada para Ação (CTA): Uma pergunta ou convite engajador para o leitor comentar.
     """
 
-    response = client.models.generate_content(
-        model=MODEL_ID,
-        contents=prompt,
-    )
-    return response.text
+    return _generate_with_retry(client, contents=prompt)
 
 
 def agente_redator(topico: str, plano_de_post: str) -> str:
@@ -108,11 +125,7 @@ def agente_redator(topico: str, plano_de_post: str) -> str:
     - Adicione de 2 a 4 hashtags relevantes no final do post.
     """
 
-    response = client.models.generate_content(
-        model=MODEL_ID,
-        contents=prompt,
-    )
-    return response.text
+    return _generate_with_retry(client, contents=prompt)
 
 
 def agente_revisor(topico: str, rascunho_gerado: str) -> str:
@@ -133,8 +146,4 @@ def agente_revisor(topico: str, rascunho_gerado: str) -> str:
     Retorne o texto final aprimorado e pronto para publicação no Instagram.
     """
 
-    response = client.models.generate_content(
-        model=MODEL_ID,
-        contents=prompt,
-    )
-    return response.text
+    return _generate_with_retry(client, contents=prompt)
