@@ -141,9 +141,3 @@ Neste projeto de estudos, foi possível compreender e aplicar:
 1. **Engenharia de Prompt Específica**: Definição de papéis (personas) e contextos delimitados para obter respostas mais precisas de cada agente.
 2. **Grounding (Ancoragem de Dados)**: Uso da busca do Google para mitigar alucinações de modelos de IA sobre fatos recentes.
 3. **Arquitetura Encadeada**: Como quebrar uma tarefa complexa (criar um post) em sub-tarefas menores executadas por agentes especialistas.
-
----
-
-## 📜 Licença
-
-Este projeto é de código aberto sob a licença [MIT](LICENSE). Sinta-se à vontade para utilizar, modificar e contribuir!
